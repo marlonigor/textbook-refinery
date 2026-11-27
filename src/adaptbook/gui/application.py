@@ -1,5 +1,6 @@
 """Janela inicial para criar áreas de trabalho de textbooks."""
 
+import subprocess
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -31,6 +32,19 @@ class UserNotifier(Protocol):
         """Exibe um erro sem acoplar a regra de negócio ao Tkinter.
 
         Exemplo: ``notifier.show_error("Adaptbook", "PDF inválido")``.
+        """
+
+
+class WorkspaceOpener(Protocol):
+    """Define a abertura da área de trabalho no sistema operacional.
+
+    Exemplo: ``opener.open_workspace(Path("trabalho/livro"))``.
+    """
+
+    def open_workspace(self, workspace_path: Path) -> None:
+        """Abre a pasta de trabalho criada pela aplicação.
+
+        Exemplo: ``opener.open_workspace(Path("trabalho/livro"))``.
         """
 
 
@@ -70,6 +84,25 @@ class TkUserNotifier:
         messagebox.showerror(title, message, parent=self._root)
 
 
+class ExplorerWorkspaceOpener:
+    """Abre pastas existentes pelo Explorador de Arquivos do Windows.
+
+    Exemplo: ``ExplorerWorkspaceOpener().open_workspace(Path("trabalho/livro"))``.
+    """
+
+    def open_workspace(self, workspace_path: Path) -> None:
+        """Inicia o Explorador na área de trabalho escolhida.
+
+        Exemplo: ``opener.open_workspace(Path("trabalho/livro"))``.
+        """
+
+        if not workspace_path.is_dir():
+            expected_state = "uma pasta de trabalho existente"
+            message = f"Área indisponível: recebido {workspace_path}; esperada {expected_state}."
+            raise OSError(message)
+        subprocess.Popen(["explorer.exe", str(workspace_path)])
+
+
 class AdaptbookDesktopApplication:
     """Coordena a primeira tela gráfica do Adaptbook.
 
@@ -82,13 +115,18 @@ class AdaptbookDesktopApplication:
         initializer: BookWorkspaceInitializer,
         selector: PdfPathSelector,
         notifier: UserNotifier,
+        opener: WorkspaceOpener,
     ) -> None:
         self._root = root
         self._initializer = initializer
         self._selector = selector
         self._notifier = notifier
+        self._opener = opener
         self._status = tk.StringVar(value="Selecione um PDF para começar.")
+        self._step_message = tk.StringVar(value="Etapa 1 de 5: selecione o livro.")
         self._workspace = tk.StringVar(value="Nenhuma área de trabalho criada.")
+        self._workspace_path: Path | None = None
+        self._step_labels: list[ttk.Label] = []
         self._configure_window()
         self._build_layout()
 
@@ -118,6 +156,15 @@ class AdaptbookDesktopApplication:
 
         return self._workspace.get()
 
+    @property
+    def step_message(self) -> str:
+        """Expõe o progresso textual para testes e tecnologias assistivas.
+
+        Exemplo: ``application.step_message``.
+        """
+
+        return self._step_message.get()
+
     def _configure_window(self) -> None:
         self._root.title("Adaptbook")
         self._root.configure(background="#F4F1EA")
@@ -130,6 +177,7 @@ class AdaptbookDesktopApplication:
         style.configure("Surface.TFrame", background="#FFFDF8")
         style.configure("Body.TFrame", background="#F4F1EA")
         self._configure_label_styles(style)
+        self._configure_step_styles(style)
         self._configure_primary_button_style(style)
 
     def _configure_label_styles(self, style: ttk.Style) -> None:
@@ -144,6 +192,17 @@ class AdaptbookDesktopApplication:
         )
         style.configure(
             "Muted.TLabel", background="#FFFDF8", foreground="#52606D", font=("Segoe UI", 10)
+        )
+
+    def _configure_step_styles(self, style: ttk.Style) -> None:
+        style.configure(
+            "CompletedStep.TLabel",
+            background="#FFFDF8",
+            foreground="#236B4A",
+            font=("Segoe UI", 11, "bold"),
+        )
+        style.configure(
+            "UpcomingStep.TLabel", background="#FFFDF8", foreground="#52606D", font=("Segoe UI", 11)
         )
 
     def _configure_primary_button_style(self, style: ttk.Style) -> None:
@@ -176,26 +235,43 @@ class AdaptbookDesktopApplication:
         for index, label in enumerate(
             ("1. Livro", "2. Mapa", "3. Auditoria", "4. Adaptações", "5. PDF final")
         ):
-            ttk.Label(steps, text=label, style="Body.TLabel").grid(
-                row=index + 1, sticky="w", pady=(20, 0)
-            )
+            step_label = ttk.Label(steps, text=label, style="UpcomingStep.TLabel")
+            step_label.grid(row=index + 1, sticky="w", pady=(20, 0))
+            self._step_labels.append(step_label)
 
     def _build_workspace_panel(self, parent: ttk.Frame) -> None:
         panel = ttk.Frame(parent, style="Surface.TFrame", padding=40)
         panel.grid(row=0, column=1, sticky="nsew")
+        self._build_workspace_heading(panel)
+        self._build_workspace_actions(panel)
+        self._build_workspace_feedback(panel)
+
+    def _build_workspace_heading(self, panel: ttk.Frame) -> None:
         ttk.Label(panel, text="Comece pelo seu livro", style="Title.TLabel").grid(sticky="w")
         ttk.Label(panel, text="O PDF original não será alterado.", style="Body.TLabel").grid(
             sticky="w", pady=(12, 28)
         )
-        button = ttk.Button(
+
+    def _build_workspace_actions(self, panel: ttk.Frame) -> None:
+        self._select_pdf_button = ttk.Button(
             panel, text="Selecionar PDF do livro", style="Primary.TButton", command=self.select_pdf
         )
-        button.grid(sticky="w")
+        self._select_pdf_button.grid(row=2, sticky="w")
+        self._open_workspace_button = ttk.Button(
+            panel, text="Abrir área de trabalho", command=self.open_workspace
+        )
+        self._open_workspace_button.grid(row=3, sticky="w", pady=(16, 0))
+        self._open_workspace_button.grid_remove()
+
+    def _build_workspace_feedback(self, panel: ttk.Frame) -> None:
+        ttk.Label(panel, textvariable=self._step_message, style="Muted.TLabel").grid(
+            row=4, sticky="w", pady=(28, 8)
+        )
         ttk.Label(panel, textvariable=self._status, style="Body.TLabel", wraplength=500).grid(
-            sticky="w", pady=(28, 8)
+            row=5, sticky="w", pady=(0, 8)
         )
         ttk.Label(panel, textvariable=self._workspace, style="Muted.TLabel", wraplength=500).grid(
-            sticky="w"
+            row=6, sticky="w"
         )
 
     def select_pdf(self) -> None:
@@ -208,6 +284,19 @@ class AdaptbookDesktopApplication:
         if source_pdf is None:
             return
         self._initialize_workspace(source_pdf)
+
+    def open_workspace(self) -> None:
+        """Abre a área criada sem alterar os arquivos do livro.
+
+        Exemplo: ``application.open_workspace()``.
+        """
+
+        if self._workspace_path is None:
+            return
+        try:
+            self._opener.open_workspace(self._workspace_path)
+        except OSError as error:
+            self._notifier.show_error("Adaptbook", str(error))
 
     def _initialize_workspace(self, source_pdf: Path) -> None:
         try:
@@ -222,10 +311,18 @@ class AdaptbookDesktopApplication:
         self._notifier.show_error("Adaptbook", str(error))
 
     def _show_workspace_success(self, workspace: BookWorkspace) -> None:
+        self._workspace_path = workspace.root
+        self._mark_book_step_completed()
+        self._select_pdf_button.state(["disabled"])
+        self._open_workspace_button.grid()
+        self._step_message.set("Etapa 1 de 5 concluída: Livro.")
         self._status.set(
             "Área de trabalho criada. A próxima etapa será mapear as páginas do livro."
         )
         self._workspace.set(str(workspace.root))
+
+    def _mark_book_step_completed(self) -> None:
+        self._step_labels[0].configure(text="1. Livro — concluído", style="CompletedStep.TLabel")
 
 
 def run_desktop_application() -> None:
@@ -240,5 +337,6 @@ def run_desktop_application() -> None:
         BookWorkspaceInitializer(),
         TkPdfPathSelector(),
         TkUserNotifier(root),
+        ExplorerWorkspaceOpener(),
     )
     application.run()

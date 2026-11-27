@@ -35,6 +35,18 @@ class FakeUserNotifier:
         self.messages.append((title, message))
 
 
+class FakeWorkspaceOpener:
+    """Registra a abertura de pastas sem iniciar o Explorador do Windows."""
+
+    def __init__(self) -> None:
+        self.opened_paths: list[Path] = []
+
+    def open_workspace(self, workspace_path: Path) -> None:
+        """Guarda o caminho solicitado pela interface."""
+
+        self.opened_paths.append(workspace_path)
+
+
 @pytest.fixture(scope="module")
 def root() -> Generator[tk.Tk]:
     """Fornece uma janela oculta para testar widgets nativos."""
@@ -48,12 +60,16 @@ def root() -> Generator[tk.Tk]:
 def test_shows_created_workspace_after_pdf_selection(root: tk.Tk, tmp_path: Path) -> None:
     source_pdf = tmp_path / "livro.pdf"
     source_pdf.write_bytes(b"%PDF-1.4")
-    application = _application(root, source_pdf)
+    opener = FakeWorkspaceOpener()
+    application = _application(root, source_pdf, opener=opener)
 
     application.select_pdf()
+    application.open_workspace()
 
     assert "Área de trabalho criada" in application.status_message
+    assert application.step_message == "Etapa 1 de 5 concluída: Livro."
     assert application.workspace_message.endswith("trabalho\\livro")
+    assert opener.opened_paths[0].name == "livro"
 
 
 def test_shows_error_for_invalid_selection(root: tk.Tk, tmp_path: Path) -> None:
@@ -81,12 +97,14 @@ def _application(
     root: tk.Tk,
     source_pdf: Path | None,
     notifier: FakeUserNotifier | None = None,
+    opener: FakeWorkspaceOpener | None = None,
 ) -> AdaptbookDesktopApplication:
     return AdaptbookDesktopApplication(
         root,
         BookWorkspaceInitializer(clock=_fixed_clock),
         FakePdfPathSelector(source_pdf),
         notifier or FakeUserNotifier(),
+        opener or FakeWorkspaceOpener(),
     )
 
 
