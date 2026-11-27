@@ -179,6 +179,7 @@ class AdaptbookDesktopApplication:
         self._configure_label_styles(style)
         self._configure_step_styles(style)
         self._configure_primary_button_style(style)
+        self._configure_secondary_button_style(style)
 
     def _configure_label_styles(self, style: ttk.Style) -> None:
         style.configure(
@@ -219,6 +220,16 @@ class AdaptbookDesktopApplication:
             foreground=[("disabled", "#F4F1EA")],
         )
 
+    def _configure_secondary_button_style(self, style: ttk.Style) -> None:
+        style.configure(
+            "Secondary.TButton",
+            background="#FFFDF8",
+            foreground="#176B87",
+            font=("Segoe UI", 11, "bold"),
+            padding=(20, 12),
+        )
+        style.map("Secondary.TButton", background=[("active", "#E6F0F4")])
+
     def _build_layout(self) -> None:
         body = ttk.Frame(self._root, style="Body.TFrame", padding=32)
         body.grid(sticky="nsew")
@@ -258,7 +269,10 @@ class AdaptbookDesktopApplication:
         )
         self._select_pdf_button.grid(row=2, sticky="w")
         self._open_workspace_button = ttk.Button(
-            panel, text="Abrir área de trabalho", command=self.open_workspace
+            panel,
+            text="Abrir área de trabalho",
+            style="Secondary.TButton",
+            command=self.open_workspace,
         )
         self._open_workspace_button.grid(row=3, sticky="w", pady=(16, 0))
         self._open_workspace_button.grid_remove()
