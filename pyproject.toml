@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools==84.2.1", "wheel==0.48.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adaptbook"
+version = "0.1.0"
+description = "Adapta textbooks em PDF para estudo autossuficiente."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+authors = [{ name = "Igor Marlon" }]
+dependencies = [
+  "pdfplumber==0.11.10",
+  "pydantic==2.14.4",
+  "pypdf==7.2.0",
+  "pypdfium2==5.15.2",
+  "PyYAML==6.0.4",
+  "typer==0.29.3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "coverage==7.17.5",
+  "mypy==2.4.1",
+  "pytest==9.2.0",
+  "ruff==0.17.6",
+  "types-PyYAML==6.0.12.20261122",
+]
+
+[project.scripts]
+adaptbook = "adaptbook.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.coverage.run]
+branch = true
+source = ["adaptbook"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["src", "tests"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["B", "C90", "E", "F", "I", "N", "PLR", "RUF", "UP"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-branches = 10
+max-returns = 6
+max-statements = 20
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004"]
